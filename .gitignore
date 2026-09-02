@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.teaching-agent/
+workspace/notes/secret-note.md
