@@ -325,6 +325,50 @@ disable-model-invocation: false
 
 `name` 和 `description` 必填；其他字段可选。`allowed-tools` 是规范的**声明性字段**，本项目不会把它当成授权或自动启用工具。`disable-model-invocation: true` 会隐藏自动发现入口，仍可通过 `/skill:name` 显式调用。示例见 `skills/agent-loop/SKILL.md`、`skills/agent-loop/references/` 和 `skills/review-only/SKILL.md`。
 
+### 当前已实现的 Skill 能力
+
+实现位置：
+
+```text
+src/agent/skills.ts                  # SkillRegistry：发现、解析、资源索引和命令展开
+src/tools/read-skill.ts              # read_skill
+src/tools/list-skill-resources.ts    # list_skill_resources
+src/tools/read-skill-resource.ts     # read_skill_resource
+```
+
+当前项目中的 `agent-loop` Skill 已实际包含：
+
+```text
+skills/agent-loop/
+├── SKILL.md
+├── references/agent-loop-glossary.md
+├── scripts/example.sh
+└── assets/template.json
+```
+
+因此，下面这些资源清单是 Harness 运行时从真实目录扫描得到的，不是 Skill 运行后生成的：
+
+```text
+assets/template.json [asset]
+references/agent-loop-glossary.md [reference]
+scripts/example.sh [script]
+```
+
+资源访问规则：
+
+- 只能通过已登记的 Skill 名称和资源相对路径访问。
+- 禁止 `..` 越界路径、绝对路径和符号链接资源。
+- 当前只读取小型文本资源；不会自动执行脚本，也不会把资源写回 Skill 目录。
+- `scripts/example.sh` 只能由用户手动运行，或在未来由另行授权的命令工具执行。
+- `allowed-tools` 只作为 Skill 元数据展示，不会自动注册或授权工具。
+
+对应测试位于 `src/agent/skills.test.ts`，运行：
+
+```bash
+npm run typecheck
+npm test
+```
+
 ### Harness 如何使用
 
 1. CLI (`src/index.ts`) 和 HTTP (`src/server.ts`) 初始化 `SkillRegistry`，递归发现 `skills/` 下的 `SKILL.md`，并注册三个**只读**工具。
