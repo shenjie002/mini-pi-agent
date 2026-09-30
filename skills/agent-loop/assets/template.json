@@ -1,0 +1,9 @@
+{
+  "title": "Agent Loop 最小流程",
+  "steps": [
+    "用户输入",
+    "模型回复或请求工具",
+    "Harness 执行工具并回写 toolResult",
+    "模型读取结果并生成最终回答"
+  ]
+}

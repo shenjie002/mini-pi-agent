@@ -162,7 +162,7 @@ npm install
 npm run dev
 ```
 
-CLI 入口当前会执行一个示例任务，并展示：
+CLI 入口当前会执行一个示例任务（也可用 `npm run dev -- '你的任务'` 提供任务），并展示：
 
 - Agent 事件
 - 模型工具调用
@@ -281,6 +281,68 @@ The following features are intentionally not implemented yet:
 - Complete test suite
 - Environment-based configuration system
 - Production deployment configuration
+
+## Skills（完整结构，教学版 Harness）
+
+Skill 不是插件钩子，而是 **一份 `SKILL.md` 工作流 + 同目录的配套文件**。项目中的真实例子是：
+
+```text
+skills/agent-loop/
+├── SKILL.md
+├── references/agent-loop-glossary.md
+├── scripts/example.sh
+└── assets/template.json
+```
+
+`scripts/example.sh` 从 `assets/template.json` 读取四步 Agent Loop 模板并打印到标准输出；它是预先放在 Skill 里的脚本，**不是 Skill 运行后生成的结果**，Harness 也不会自动执行它。可由人手动运行：
+
+```bash
+sh skills/agent-loop/scripts/example.sh
+```
+
+输出只在终端显示；若将来要把脚本输出接入 Agent 对话，需另行实现并授权执行工具。
+
+`SKILL.md` 的 frontmatter 使用 YAML，正文使用 Markdown：
+
+```markdown
+---
+name: my-skill
+description: 描述做什么，以及何时适用；模型依此决定是否加载。
+license: MIT
+compatibility: 需要 Node.js 环境
+metadata:
+  category: education
+  version: "1"
+allowed-tools: "read_skill read_skill_resource"
+disable-model-invocation: false
+---
+
+# 工作流
+
+1. 先读 references/guide.md。
+2. 按参考资料完成用户的任务。
+```
+
+`name` 和 `description` 必填；其他字段可选。`allowed-tools` 是规范的**声明性字段**，本项目不会把它当成授权或自动启用工具。`disable-model-invocation: true` 会隐藏自动发现入口，仍可通过 `/skill:name` 显式调用。示例见 `skills/agent-loop/SKILL.md`、`skills/agent-loop/references/` 和 `skills/review-only/SKILL.md`。
+
+### Harness 如何使用
+
+1. CLI (`src/index.ts`) 和 HTTP (`src/server.ts`) 初始化 `SkillRegistry`，递归发现 `skills/` 下的 `SKILL.md`，并注册三个**只读**工具。
+2. `skills.systemPrompt()` 仅把可自动调用的技能名称、简介和少量元数据放入系统提示，不提前注入全部正文。
+3. 模型判断任务匹配时调用 `read_skill({"name":"agent-loop"})`，得到完整工作流、路径、元数据和资源清单；按需调用 `list_skill_resources({"name":"agent-loop"})` 和 `read_skill_resource({"name":"agent-loop","path":"references/agent-loop-glossary.md"})` 读取配套文本（隐藏技能不会出现在系统提示中，但已知名称时仍可读取）。
+4. 显式调用时，Harness 在请求进入 Agent Loop 前执行 `skills.expandCommand(text)`，把 `/skill:agent-loop 解释工具调用` 替换为完整技能说明 + 用户参数；因此不依赖模型自行发现。HTTP 可以用：
+
+```bash
+curl -X POST http://localhost:4317/api/prompt \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"/skill:agent-loop 解释工具调用"}'
+```
+
+CLI 从命令行参数接收任务，可用 `npm run dev -- '/skill:agent-loop 解释工具调用'` 演示显式调用；`/skill:review-only ...` 演示只在显式调用时向模型展示的技能。
+
+资源按需列出和读取；当前没有让 Agent 自动执行脚本的工具，且技能**不能绕过已有工具的工作区限制或审批规则**。`disable-model-invocation` 只影响是否在系统提示中列出，不构成安全隔离；将来如果 Harness 注册了执行工具，仍需要独立的权限审查。示例技能可通过 `read_file` 读取 `workspace/notes/agent-loop.md`，但不能通过该工具读取项目源码 `src/`。技能目录支持嵌套发现，但未实现 Pi 的全局技能目录、包分发、热加载、信任配置及 Agent 自动执行脚本。文本资源支持读取，二进制资源暂不支持。
+
+运行无需 LM Studio 的单元测试：`npm test`；模型自动选择技能的效果仍需连接 LM Studio 验证。
 
 ## 学习路线 | Learning Path
 

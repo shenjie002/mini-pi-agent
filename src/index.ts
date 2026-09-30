@@ -7,6 +7,10 @@ import { ToolRegistry } from "./agent/tools.js";
 import { createReadFileTool } from "./tools/read-file.js";
 import { createListFilesTool } from "./tools/list-files.js";
 import { createWriteNoteTool } from "./tools/write-note.js";
+import { SkillRegistry } from "./agent/skills.js";
+import { createReadSkillTool } from "./tools/read-skill.js";
+import { createListSkillResourcesTool } from "./tools/list-skill-resources.js";
+import { createReadSkillResourceTool } from "./tools/read-skill-resource.js";
 import { PluginManager } from "./plugin/manager.js";
 import loggerPlugin from "./plugin/logger.js";
 import protectedPathsPlugin from "./plugin/protected-paths.js";
@@ -22,6 +26,10 @@ const workspaceRoot = resolve("workspace");
 tools.register(createReadFileTool(workspaceRoot));
 tools.register(createListFilesTool(workspaceRoot));
 tools.register(createWriteNoteTool(workspaceRoot));
+const skills = new SkillRegistry(resolve("skills"));
+tools.register(createReadSkillTool(skills));
+tools.register(createListSkillResourcesTool(skills));
+tools.register(createReadSkillResourceTool(skills));
 const store = new SessionStore(
   ".teaching-agent/session.jsonl",
   process.cwd(),
@@ -30,12 +38,14 @@ const readline = createInterface({
   input,
   output,
 });
+const promptText = process.argv.slice(2).join(" ") ||
+  "请写一篇 Agent Loop 笔记，保存为 secret-note.md。";
 const userMessage = {
   role: "user" as const,
   content: [
     {
       type: "text" as const,
-      text: "请写一篇 Agent Loop 笔记，保存为 secret-note.md。",
+      text: skills.expandCommand(promptText),
     },
   ],
   timestamp: Date.now(),
@@ -55,6 +65,7 @@ systemPrompt:  `
   你是一个简洁的中文助手。
   你可以使用工具操作 workspace。
   所有工具路径必须使用相对路径。
+  ${skills.systemPrompt()}
 `,
 messages: contextBeforeRun,
   tools,

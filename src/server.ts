@@ -7,6 +7,10 @@ import { ToolRegistry } from "./agent/tools.js";
 import { createReadFileTool } from "./tools/read-file.js";
 import { createListFilesTool } from "./tools/list-files.js";
 import { createWriteNoteTool } from "./tools/write-note.js";
+import { SkillRegistry } from "./agent/skills.js";
+import { createReadSkillTool } from "./tools/read-skill.js";
+import { createListSkillResourcesTool } from "./tools/list-skill-resources.js";
+import { createReadSkillResourceTool } from "./tools/read-skill-resource.js";
 import type { AgentEvent } from "./shared/protocol.js";
 
 const app = express();
@@ -25,6 +29,10 @@ const tools = new ToolRegistry();
 tools.register(createReadFileTool(workspaceRoot));
 tools.register(createListFilesTool(workspaceRoot));
 tools.register(createWriteNoteTool(workspaceRoot));
+const skills = new SkillRegistry(resolve("skills"));
+tools.register(createReadSkillTool(skills));
+tools.register(createListSkillResourcesTool(skills));
+tools.register(createReadSkillResourceTool(skills));
 
 const store = new SessionStore(
   ".teaching-agent/session.jsonl",
@@ -43,12 +51,20 @@ app.post("/api/prompt", async (req, res) => {
     return;
   }
 
+  let expandedText: string;
+  try {
+    expandedText = skills.expandCommand(text.trim());
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+
   const userMessage = {
     role: "user" as const,
     content: [
       {
         type: "text" as const,
-        text: text.trim(),
+        text: expandedText,
       },
     ],
     timestamp: Date.now(),
@@ -66,6 +82,7 @@ app.post("/api/prompt", async (req, res) => {
 你是一个简洁的中文助手。
 所有工具路径必须使用相对于 workspace 的相对路径，
 例如 README.md，禁止使用绝对路径。
+${skills.systemPrompt()}
 `,
     messages: store.buildContext(),
     tools,
